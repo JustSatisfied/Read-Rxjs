@@ -1,95 +1,62 @@
-name: Build, Test and Deploy - yepengfei/demo
+name: Build and Deploy
 
 on:
   push:
     branches: [ "yepengfei/demo" ]
-  pull_request:
-    branches: [ "yepengfei/demo" ]
   workflow_dispatch:
 
 jobs:
-  build-and-deploy:
+  deploy:
     runs-on: self-hosted
-    timeout-minutes: 20
+    strategy:
+      matrix:
+        include:
+          - os_label: linux
+            deploy_dir: /var/www/yepengfei-demo
+          - os_label: windows
+            deploy_dir: 'C:\yepengfei-demo'
     
     env:
       NODE_ENV: production
       GIT_HTTP_MAX_BUFFER: 524288000
-      DEPLOY_DIR: ${{ runner.os == 'Windows' && 'C:\\yepengfei-demo' || '/var/www/yepengfei-demo' }}
+      DEPLOY_DIR: ${{ matrix.deploy_dir }}
 
     steps:
-    # ========== 网络问题修复部分 ==========
-    - name: Configure Git
-      shell: bash
-      run: |
-        git config --global http.sslVerify false
-        git config --global http.postBuffer 1048576000
-        git config --global http.version HTTP/1.1
+      - name: Check OS compatibility
+        if: ${{ !contains(matrix.os_label, runner.label) }}
+        run: |
+          echo "错误：Runner 标签不匹配"
+          echo "需要的标签: ${{ matrix.os_label }}"
+          echo "Runner 实际标签: ${{ join(runner.labels, ',') }}"
+          exit 1
 
-    - name: Attempt Checkout (Primary)
-      uses: actions/checkout@v4
-      with:
-        ref: yepengfei/demo
-        fetch-depth: 1
-        retries: 3
-        retry-wait-seconds: 10
-      continue-on-error: true
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Fallback Manual Clone
-      if: steps.checkout.outcome == 'failure'
-      shell: bash
-      run: |
-        echo "使用备用克隆方案..."
-        rm -rf *
-        git init -q
-        git remote add origin https://github.com/JustSatisfied/Read-Rxjs.git
-        git fetch --depth=1 origin ${{ github.ref }}
-        git checkout -f FETCH_HEAD
-        git reset --hard
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.14'
 
-    # ========== 构建测试部分 ==========
-    - name: Set up Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '20'
-        cache: 'npm'
+      - name: Install dependencies
+        run: npm ci
 
-    - name: Install dependencies
-      run: npm ci --legacy-peer-deps
+      - name: Build project
+        run: npm run build
 
-    - name: Run tests
-      run: npm test
+      - name: Prepare deploy directory
+        run: |
+          if [ "${{ matrix.os_label }}" == "windows" ]; then
+            mkdir "$DEPLOY_DIR"
+          else
+            sudo mkdir -p "$DEPLOY_DIR"
+            sudo chown -R $USER "$DEPLOY_DIR"
+          fi
 
-    - name: Build project
-      run: npm run build
-
-    # ========== 本地部署部分 ==========
-    - name: Prepare deployment directory
-      shell: bash
-      run: |
-        if [[ "$RUNNER_OS" == "Linux" || "$RUNNER_OS" == "macOS" ]]; then
-          sudo mkdir -p $DEPLOY_DIR
-          sudo chown -R $USER:$USER $DEPLOY_DIR
-        else
-          mkdir -p $DEPLOY_DIR
-        fi
-
-    - name: Deploy to local server
-      shell: bash
-      run: |
-        echo "正在部署到 $DEPLOY_DIR"
-        if [[ "$RUNNER_OS" == "Linux" || "$RUNNER_OS" == "macOS" ]]; then
-          cp -rv ./dist/* $DEPLOY_DIR/
-        else
-          xcopy /E /I /Y ".\dist" "$DEPLOY_DIR\\"
-        fi
-
-    - name: Verify deployment
-      shell: bash
-      run: |
-        echo "部署内容验证:"
-        if [[ "$RUNNER_OS" == "Linux" || "$RUNNER_OS" == "macOS" ]]; then
-          ls -la $DEPLOY_DIR
-        else
-          dir "$DEPLOY_DIR"
-        fi
+      - name: Deploy files
+        run: |
+          if [ "${{ matrix.os_label }}" == "windows" ]; then
+            xcopy /E /I /Y ".\dist" "$DEPLOY_DIR\"
+          else
+            cp -r ./dist/* "$DEPLOY_DIR/"
+          fi
