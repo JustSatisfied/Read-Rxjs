@@ -1,66 +1,95 @@
-name: Build and Deploy - yepengfei/demo
+name: Build, Test and Deploy - yepengfei/demo
 
 on:
   push:
-    branches: [ "yepengfei/demo" ]  # 专门针对你的分支
+    branches: [ "yepengfei/demo" ]
   pull_request:
     branches: [ "yepengfei/demo" ]
-  workflow_dispatch:  # 允许手动触发
+  workflow_dispatch:
 
 jobs:
-  build:
-    runs-on: self-hosted  # 使用你的本地Runner
+  build-and-deploy:
+    runs-on: self-hosted
+    timeout-minutes: 20
+    
     env:
       NODE_ENV: production
-    
+      GIT_HTTP_MAX_BUFFER: 524288000
+      DEPLOY_DIR: ${{ runner.os == 'Windows' && 'C:\\yepengfei-demo' || '/var/www/yepengfei-demo' }}
+
     steps:
-    - name: Checkout code
+    # ========== 网络问题修复部分 ==========
+    - name: Configure Git
+      shell: bash
+      run: |
+        git config --global http.sslVerify false
+        git config --global http.postBuffer 1048576000
+        git config --global http.version HTTP/1.1
+
+    - name: Attempt Checkout (Primary)
       uses: actions/checkout@v4
       with:
-        repository: JustSatisfied/Read-Rxjs
-        ssh-key: ${{ secrets.SSH_PRIVATE_KEY }}
+        ref: yepengfei/demo
+        fetch-depth: 1
+        retries: 3
+        retry-wait-seconds: 10
+      continue-on-error: true
 
-    - name: Checkout code
-      uses: actions/checkout@v4
-      with:
-        ref: yepengfei/demo  # 明确指定分支
+    - name: Fallback Manual Clone
+      if: steps.checkout.outcome == 'failure'
+      shell: bash
+      run: |
+        echo "使用备用克隆方案..."
+        rm -rf *
+        git init -q
+        git remote add origin https://github.com/JustSatisfied/Read-Rxjs.git
+        git fetch --depth=1 origin ${{ github.ref }}
+        git checkout -f FETCH_HEAD
+        git reset --hard
 
+    # ========== 构建测试部分 ==========
     - name: Set up Node.js
       uses: actions/setup-node@v4
       with:
-        node-version: '22.14'
+        node-version: '20'
         cache: 'npm'
 
     - name: Install dependencies
-      run: npm ci  # 更严格的依赖安装
+      run: npm ci --legacy-peer-deps
 
     - name: Run tests
-      run: npm test  # 确保你的项目有测试脚本
+      run: npm test
 
     - name: Build project
       run: npm run build
 
-    - name: Deploy to local server
+    # ========== 本地部署部分 ==========
+    - name: Prepare deployment directory
+      shell: bash
       run: |
-        # Linux/macOS 部署
-        if [ "$RUNNER_OS" == "Linux" ] || [ "$RUNNER_OS" == "macOS" ]; then
-          DEPLOY_DIR="/var/www/yepengfei-demo"
+        if [[ "$RUNNER_OS" == "Linux" || "$RUNNER_OS" == "macOS" ]]; then
           sudo mkdir -p $DEPLOY_DIR
-          sudo cp -r ./dist/* $DEPLOY_DIR/
-          echo "✅ Deployed to $DEPLOY_DIR"
-        
-        # Windows 部署
-        elif [ "$RUNNER_OS" == "Windows" ]; then
-          $DEPLOY_DIR = "C:\yepengfei-demo"
-          if (!(Test-Path $DEPLOY_DIR)) { New-Item -ItemType Directory -Path $DEPLOY_DIR }
-          Copy-Item -Path ".\dist\*" -Destination $DEPLOY_DIR -Recurse -Force
-          echo "✅ Deployed to $DEPLOY_DIR"
+          sudo chown -R $USER:$USER $DEPLOY_DIR
+        else
+          mkdir -p $DEPLOY_DIR
+        fi
+
+    - name: Deploy to local server
+      shell: bash
+      run: |
+        echo "正在部署到 $DEPLOY_DIR"
+        if [[ "$RUNNER_OS" == "Linux" || "$RUNNER_OS" == "macOS" ]]; then
+          cp -rv ./dist/* $DEPLOY_DIR/
+        else
+          xcopy /E /I /Y ".\dist" "$DEPLOY_DIR\\"
         fi
 
     - name: Verify deployment
+      shell: bash
       run: |
-        if [ "$RUNNER_OS" == "Linux" ] || [ "$RUNNER_OS" == "macOS" ]; then
-          ls -l /var/www/yepengfei-demo
+        echo "部署内容验证:"
+        if [[ "$RUNNER_OS" == "Linux" || "$RUNNER_OS" == "macOS" ]]; then
+          ls -la $DEPLOY_DIR
         else
-          dir "C:\yepengfei-demo"
+          dir "$DEPLOY_DIR"
         fi
