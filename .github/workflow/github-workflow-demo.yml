@@ -1,21 +1,38 @@
-name: Deploy to Local Machine
+name: Local Build with Runner
 
 on:
   push:
     branches: [ yepengfei/demo ]
-  workflow_dispatch:
+  workflow_dispatch:  # 允许手动触发
 
 jobs:
-  deploy:
-    runs-on: self-hosted  # 关键！任务将在你的本地 Runner 执行
+  build:
+    runs-on: self-hosted  # 关键！使用本地Runner
+    
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      - name: Deploy Files
-        run: |
-          # Linux/macOS 示例：复制文件到 Web 目录
-          sudo cp -r ./dist /var/www/html
-
-          # Windows 示例（取消注释）：
-          xcopy .\dist C:\deploy /E /I /Y
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '22.14'  # 指定Node版本
+        cache: 'npm'       # 缓存依赖
+        
+    - name: Install dependencies
+      run: npm install
+      
+    - name: Run build
+      run: npm run build   # 执行package.json中的build脚本
+      
+    - name: Archive build artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: build-output
+    - name: Deploy to local path
+      run: |
+          if [ "$RUNNER_OS" == "Linux" ]; then
+            sudo cp -r ./dist /var/www/html
+          else
+            xcopy .\dist C:\deploy /E /I /Y
+          fi
