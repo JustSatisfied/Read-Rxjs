@@ -1,38 +1,60 @@
-name: Local Build with Runner
+name: Build and Deploy - yepengfei/demo
 
 on:
   push:
-    branches: [ yepengfei/demo ]
+    branches: [ "yepengfei/demo" ]  # 专门针对你的分支
+  pull_request:
+    branches: [ "yepengfei/demo" ]
   workflow_dispatch:  # 允许手动触发
 
 jobs:
   build:
-    runs-on: self-hosted  # 关键！使用本地Runner
+    runs-on: self-hosted  # 使用你的本地Runner
+    env:
+      NODE_ENV: production
     
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
-      
+      with:
+        ref: yepengfei/demo  # 明确指定分支
+
     - name: Set up Node.js
       uses: actions/setup-node@v4
       with:
-        node-version: '22.14'  # 指定Node版本
-        cache: 'npm'       # 缓存依赖
-        
+        node-version: '22.14'
+        cache: 'npm'
+
     - name: Install dependencies
-      run: npm install
-      
-    - name: Run build
-      run: npm run build   # 执行package.json中的build脚本
-      
-    - name: Archive build artifacts
-      uses: actions/upload-artifact@v3
-      with:
-        name: build-output
-    - name: Deploy to local path
+      run: npm ci  # 更严格的依赖安装
+
+    - name: Run tests
+      run: npm test  # 确保你的项目有测试脚本
+
+    - name: Build project
+      run: npm run build
+
+    - name: Deploy to local server
       run: |
-          if [ "$RUNNER_OS" == "Linux" ]; then
-            sudo cp -r ./dist /var/www/html
-          else
-            xcopy .\dist C:\deploy /E /I /Y
-          fi
+        # Linux/macOS 部署
+        if [ "$RUNNER_OS" == "Linux" ] || [ "$RUNNER_OS" == "macOS" ]; then
+          DEPLOY_DIR="/var/www/yepengfei-demo"
+          sudo mkdir -p $DEPLOY_DIR
+          sudo cp -r ./dist/* $DEPLOY_DIR/
+          echo "✅ Deployed to $DEPLOY_DIR"
+        
+        # Windows 部署
+        elif [ "$RUNNER_OS" == "Windows" ]; then
+          $DEPLOY_DIR = "C:\yepengfei-demo"
+          if (!(Test-Path $DEPLOY_DIR)) { New-Item -ItemType Directory -Path $DEPLOY_DIR }
+          Copy-Item -Path ".\dist\*" -Destination $DEPLOY_DIR -Recurse -Force
+          echo "✅ Deployed to $DEPLOY_DIR"
+        fi
+
+    - name: Verify deployment
+      run: |
+        if [ "$RUNNER_OS" == "Linux" ] || [ "$RUNNER_OS" == "macOS" ]; then
+          ls -l /var/www/yepengfei-demo
+        else
+          dir "C:\yepengfei-demo"
+        fi
