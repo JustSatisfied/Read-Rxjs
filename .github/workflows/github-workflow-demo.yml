@@ -17,6 +17,12 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
       with:
+        repository: JustSatisfied/Read-Rxjs
+        ssh-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
         ref: yepengfei/demo  # 明确指定分支
 
     - name: Set up Node.js
