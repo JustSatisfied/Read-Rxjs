@@ -11,8 +11,6 @@ jobs:
     strategy:
       matrix:
         include:
-          - os_label: linux
-            deploy_dir: /var/www/yepengfei-demo
           - os_label: windows
             deploy_dir: 'C:\yepengfei-demo'
     
