@@ -1,0 +1,21 @@
+name: Deploy to Local Machine
+
+on:
+  push:
+    branches: [ yepengfei/demo ]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: self-hosted  # 关键！任务将在你的本地 Runner 执行
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Deploy Files
+        run: |
+          # Linux/macOS 示例：复制文件到 Web 目录
+          sudo cp -r ./dist /var/www/html
+
+          # Windows 示例（取消注释）：
+          xcopy .\dist C:\deploy /E /I /Y
