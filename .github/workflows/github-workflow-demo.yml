@@ -63,7 +63,7 @@ jobs:
     - name: Copy files
       shell: powershell
       run: |
-        Copy-Item -Path ".\dist\*" -Destination $env:DEPLOY_DIR -Recurse -Force
+        Copy-Item -Path ".\build\*" -Destination $env:DEPLOY_DIR -Recurse -Force
 
     # ========== 验证与通知 ==========
     - name: Verify deployment
