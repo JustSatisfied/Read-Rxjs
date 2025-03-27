@@ -43,18 +43,8 @@ jobs:
         run: npm run build
 
       - name: Prepare deploy directory
-        run: |
-          if [ "${{ matrix.os_label }}" == "windows" ]; then
-            mkdir "$DEPLOY_DIR"
-          else
-            sudo mkdir -p "$DEPLOY_DIR"
-            sudo chown -R $USER "$DEPLOY_DIR"
-          fi
+        run: mkdir "$DEPLOY_DIR"
 
       - name: Deploy files
-        run: |
-          if [ "${{ matrix.os_label }}" == "windows" ]; then
-            xcopy /E /I /Y ".\dist" "$DEPLOY_DIR\"
-          else
-            cp -r ./dist/* "$DEPLOY_DIR/"
-          fi
+        run: cp -r ./dist/* "$DEPLOY_DIR/"
+     
