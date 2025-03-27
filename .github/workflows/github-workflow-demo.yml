@@ -1,4 +1,4 @@
-name: Build and Deploy
+name: Windows Build and Deploy - yepengfei/demo
 
 on:
   push:
@@ -6,13 +6,11 @@ on:
   workflow_dispatch:
 
 jobs:
-  deploy:
-    runs-on: self-hosted
+  deploy-windows:
+    runs-on: [self-hosted, windows]  # 仅匹配带 windows 标签的 Runner
     strategy:
       matrix:
-        include:
-          - os_label: windows
-            deploy_dir: 'C:\yepengfei-demo'
+        deploy_dir: ['C:\\yepengfei-demo']  # 矩阵定义部署路径
     
     env:
       NODE_ENV: production
@@ -20,31 +18,62 @@ jobs:
       DEPLOY_DIR: ${{ matrix.deploy_dir }}
 
     steps:
-      - name: Check OS compatibility
-        if: ${{ !contains(matrix.os_label, runner.label) }}
-        run: |
-          echo "错误：Runner 标签不匹配"
-          echo "需要的标签: ${{ matrix.os_label }}"
-          echo "Runner 实际标签: ${{ join(runner.labels, ',') }}"
-          exit 1
+    # ========== 网络配置 ==========
+    - name: Configure Git
+      shell: powershell
+      run: |
+        git config --global http.sslVerify false
+        git config --global http.postBuffer 1048576000
+        git config --global core.longpaths true
 
-      - name: Checkout code
-        uses: actions/checkout@v4
+    # ========== 代码获取 ==========
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        ref: yepengfei/demo
+        fetch-depth: 1
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22.14'
+    # ========== 构建部分 ==========
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '22.14'
+        cache: 'npm'
 
-      - name: Install dependencies
-        run: npm ci
+    - name: Install dependencies
+      shell: powershell
+      run: npm ci --legacy-peer-deps
 
-      - name: Build project
-        run: npm run build
+    - name: Run tests
+      shell: powershell
+      run: npm test
 
-      - name: Prepare deploy directory
-        run: mkdir "$DEPLOY_DIR"
+    - name: Build project
+      shell: powershell
+      run: npm run build
 
-      - name: Deploy files
-        run: cp -r ./dist/* "$DEPLOY_DIR/"
-     
+    # ========== Windows 专属部署 ==========
+    - name: Create deploy directory
+      shell: powershell
+      run: |
+        if (!(Test-Path $env:DEPLOY_DIR)) {
+          New-Item -ItemType Directory -Path $env:DEPLOY_DIR
+        }
+
+    - name: Copy files
+      shell: powershell
+      run: |
+        Copy-Item -Path ".\dist\*" -Destination $env:DEPLOY_DIR -Recurse -Force
+
+    # ========== 验证与通知 ==========
+    - name: Verify deployment
+      shell: powershell
+      run: |
+        Write-Output "部署内容验证:"
+        Get-ChildItem -Path $env:DEPLOY_DIR
+
+    - name: Completion notice
+      run: |
+        echo "✅ Windows 部署完成"
+        echo "本地路径: file:///$DEPLOY_DIR"
+        echo "可通过资源管理器访问: $DEPLOY_DIR"
