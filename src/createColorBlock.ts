@@ -13,14 +13,19 @@ function getPositionXY(event: MouseEvent, canvas: HTMLCanvasElement) {
     return [x, y]
 }
 
+function getCanvasRgbColor(ctx: CanvasRenderingContext2D, x: number, y: number) {
+    const pixelData = ctx.getImageData(x, y, 1, 1).data;
+    const r = pixelData[0];
+    const g = pixelData[1];
+    const b = pixelData[2];
+    return [r, g, b]
+}
+
 export function addEventGetColorToBlock(canvas: HTMLCanvasElement, selectedColorDiv: HTMLDivElement, ctx: CanvasRenderingContext2D, setList: any, rgbValueDiv?: HTMLDivElement | null,) {
     canvas.addEventListener('mousemove', (event) => {
         const [x, y] = getPositionXY(event, canvas)
         if (x >= 0 && x < width && y >= 0 && y < height) {
-            const pixelData = ctx.getImageData(x, y, 1, 1).data;
-            const r = pixelData[0];
-            const g = pixelData[1];
-            const b = pixelData[2];
+            const [r, g, b] = getCanvasRgbColor(ctx, x, y)
             const rgbColor = `rgb(${r}, ${g}, ${b})`;
             selectedColorDiv.style.backgroundColor = rgbColor;
             rgbValueDiv && (rgbValueDiv.textContent = `RGB: ${r}, ${g}, ${b}`);
@@ -29,10 +34,7 @@ export function addEventGetColorToBlock(canvas: HTMLCanvasElement, selectedColor
 
     canvas.addEventListener("mousedown", event => {
         const [x, y] = getPositionXY(event, canvas);
-        const pixelData = ctx.getImageData(x, y, 1, 1).data;
-        const r = pixelData[0];
-        const g = pixelData[1];
-        const b = pixelData[2];
+        const [r, g, b] = getCanvasRgbColor(ctx, x, y)
         const rgbColor: rgbObject = {
             r,
             g,
